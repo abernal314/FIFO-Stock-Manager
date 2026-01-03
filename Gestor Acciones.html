@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>Gestor FIFO de Acciones</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+		<style>
+			:root{
+				--bg:#0f1724; --card:#0b1220; --accent:#2dd4bf; --accent-2:#7c3aed; --muted:#9aa4b2; --glass: rgba(255,255,255,0.04);
+				--success:#16a34a; --danger:#ef4444;
+			}
+			*{box-sizing:border-box}
+			html,body{height:100%}
+			body{
+				font-family:Inter,Segoe UI,Helvetica,Arial; margin:0; background: linear-gradient(180deg,#071024 0%, #081226 50%, #071428 100%); color:#e6eef6; -webkit-font-smoothing:antialiased;
+				padding:28px; display:flex; justify-content:center;
+			}
+			.wrap{width:100%;max-width:1200px}
+			header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+			.brand{display:flex;align-items:center;gap:12px}
+			.logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#042022}
+			h1{margin:0;font-size:1.25rem;color:var(--accent)}
+			.grid{display:grid;grid-template-columns:1fr 400px;gap:18px;margin-top:18px}
+			.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px;padding:14px; box-shadow:0 6px 18px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.03)}
+			form .row{display:flex;gap:10px;margin-bottom:10px}
+			label{font-size:0.85rem;color:var(--muted);display:block;margin-bottom:6px}
+			input,select,button{padding:10px;border:1px solid rgba(255,255,255,0.06);border-radius:10px;background:transparent;color:inherit;font-size:0.95rem}
+			/* campos pequeños (cantidad / precio) para evitar solapamiento */
+			input.small-field{width:110px;min-width:80px;max-width:140px}
+			/* permitir que las filas puedan envolver elementos si el espacio es reducido */
+			form .row{flex-wrap:wrap}
+			input::placeholder{color:rgba(230,238,246,0.35)}
+			button{cursor:pointer}
+			button.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));border:none;color:#042022;font-weight:600;padding:10px 14px;border-radius:10px}
+			button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04)}
+			.muted{color:var(--muted)}
+			/* mejoras de contraste para selects y sus opciones */
+			#filterEmpresa{
+				color:var(--accent);
+				background: rgba(255,255,255,0.02);
+				border-radius:8px; padding:8px;
+			}
+			/* Forzar texto oscuro y fondo claro dentro del desplegable (mejora legibilidad en la mayoría de navegadores) */
+			#filterEmpresa option, #tipo option{ color:#042022 !important; background:#f3f4f6 !important }
+			/* eliminar -webkit-appearance para permitir estilos personalizados en algunos navegadores */
+			select{ -webkit-appearance:none; appearance:none }
+			/* arreglo del icono desplegable en IE/Edge */
+			select::-ms-expand{ display:none }
+			/* estilos específicos por tipo (compra/venta) */
+			select#tipo.tipo-compra{ background: linear-gradient(90deg, rgba(34,197,94,0.18), rgba(34,197,94,0.06)); color:#0b5f40; border:1px solid rgba(34,197,94,0.28) }
+			select#tipo.tipo-venta{ background: linear-gradient(90deg, rgba(239,68,68,0.14), rgba(239,68,68,0.04)); color:#6b0f0f; border:1px solid rgba(239,68,68,0.18) }
+			/* Forzar fondo más visible en selects (algunos navegadores ignoran ciertos estilos) */
+			.tipo-compra{ background-color: rgba(16,185,129,0.14) !important; }
+			.tipo-venta{ background-color: rgba(239,68,68,0.12) !important; }
+
+			/* Estilos para filas de transacción según tipo */
+			tr.tx-compra{ background: linear-gradient(90deg, rgba(16,185,129,0.04), rgba(16,185,129,0.01)); }
+			tr.tx-venta{ background: linear-gradient(90deg, rgba(239,68,68,0.04), rgba(239,68,68,0.01)); }
+			tbody tr.tx-compra td{ border-left:4px solid rgba(16,185,129,0.22); }
+			tbody tr.tx-venta td{ border-left:4px solid rgba(239,68,68,0.18); }
+			table{width:100%;border-collapse:collapse;margin-top:8px;font-size:0.95rem}
+			thead th{color:var(--muted);font-weight:600;font-size:0.8rem;padding:8px 6px;text-align:left}
+			tbody td{padding:10px 6px;border-top:1px solid rgba(255,255,255,0.02)}
+			tbody tr:hover{background:rgba(255,255,255,0.015)}
+			.controls{display:flex;gap:8px;flex-wrap:wrap}
+			.small{font-size:0.85rem}
+			canvas{background:transparent;border-radius:6px}
+			/* Footer pequeño y sin solapamiento */
+			.wrap{width:100%;max-width:1200px; padding-bottom:76px}
+			footer{
+				margin-top:12px;
+				font-size:0.78rem;
+				color:var(--muted);
+				text-align:center;
+				padding:8px 12px;
+				border-radius:8px;
+				background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+			}
+			/* chips (etiquetas) */
+			.chip{display:inline-flex;align-items:center;gap:8px;padding:6px 8px;border-radius:999px;font-weight:600;color:#042022}
+			.badge{display:inline-block;width:10px;height:10px;border-radius:50%}
+			/* adaptativo (responsive) */
+			@media (max-width:900px){
+				.grid{grid-template-columns:1fr;}
+			}
+		</style>
+</head>
+	<body>
+	<div class="wrap">
+	<header>
+		<div class="brand">
+			<div class="logo">GFA</div>
+			<div>
+				<h1>Gestor FIFO de Acciones</h1>
+				<div class="muted small">Registro visual · FIFO · Gráficos</div>
+			</div>
+		</div>
+			<!-- Botones del encabezado eliminados (Tema / Ayuda / Añadir rápida) a petición del usuario -->
+	</header>
+
+	<section class="grid">
+		<div>
+					<div class="card">
+						<form id="txForm">
+					<div class="row">
+						<div style="flex:1">
+							<label for="fecha">Fecha</label>
+									<input id="fecha" type="date" required />
+						</div>
+						<div style="width:120px">
+							<label for="tipo">Tipo</label>
+							<select id="tipo">
+								<option value="compra">Compra</option>
+								<option value="venta">Venta</option>
+							</select>
+						</div>
+					</div>
+
+					<div class="row">
+						<div style="flex:1">
+							<label for="empresa">Empresa</label>
+							<input id="empresa" type="text" placeholder="Ej: AAPL" required />
+						</div>
+									<div style="width:140px">
+										<label for="cantidad">Cantidad</label>
+										<input id="cantidad" class="small-field" type="number" min="0.0001" step="0.0001" value="1" required />
+									</div>
+									<div style="width:140px">
+										<label for="precio">Precio (€)</label>
+										<input id="precio" class="small-field" type="number" min="0" step="0.01" value="0" required />
+									</div>
+					</div>
+
+								<div class="row" style="justify-content:space-between;align-items:center">
+									<div class="controls">
+										<button type="submit" class="primary">Añadir</button>
+										<button type="button" id="limpiarForm" class="ghost">Limpiar</button>
+									</div>
+									<div class="muted small">Si intenta vender más de lo que tiene, se rechazará.</div>
+								</div>
+				</form>
+
+				<div style="margin-top:10px">
+					<div style="display:flex;justify-content:space-between;align-items:center">
+									<div style="display:flex;align-items:center;gap:12px">
+										<strong>Transacciones</strong>
+										<div style="display:flex;gap:8px;align-items:center">
+											<label for="filterEmpresa" class="muted small" style="margin:0 6px 0 0">Filtrar:</label>
+											<select id="filterEmpresa" style="padding:8px;border-radius:8px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,0.04)">
+												<option value="">Todas las empresas</option>
+											</select>
+										</div>
+									</div>
+						<div class="controls">
+							<button id="exportCSV">Exportar CSV</button>
+							<input type="file" id="importCSV" accept=".csv,text/csv" style="display:none">
+							<button id="btnImportCSV">Importar CSV</button>
+							<button id="btnClear" style="background:#fff;color:#c33">Borrar todo</button>
+						</div>
+					</div>
+
+								<div style="overflow:auto;max-height:260px;margin-top:8px">
+						<table id="txTable">
+							<thead>
+								<tr><th>Fecha</th><th>Tipo</th><th>Empresa</th><th>Cantidad</th><th>Precio</th><th>Total</th><th></th></tr>
+							</thead>
+							<tbody></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+
+			<div class="card" style="margin-top:12px">
+				<strong>Instrucciones</strong>
+				<p class="muted small">Registre compras y ventas. El sistema aplicará FIFO para emparejar ventas con compras previas y calculará la ganancia/pérdida realizada. Use Exportar para guardar sus datos o Importar para restaurarlos.</p>
+			</div>
+		</div>
+
+		<aside>
+					<div class="card">
+						<strong>Resumen por empresa</strong>
+						<div id="summary" style="margin-top:8px"></div>
+					</div>
+
+			<div class="card" style="margin-top:12px">
+				<strong>Gráficos</strong>
+				<div style="margin-top:8px">
+					<canvas id="distChart" width="400" height="220"></canvas>
+				</div>
+				<div style="margin-top:12px">
+					<canvas id="plChart" width="400" height="190"></canvas>
+				</div>
+			</div>
+		</aside>
+	</section>
+
+	<footer class="muted">Guardado local en su navegador · Interfaz en español · Método FIFO · Producto Registrado por Bernal Entertainment © </footer>
+
+	<!-- CDN de Chart.js -->
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<script>
+		// Datos y almacenamiento
+		const STORAGE_KEY = 'gestorAcciones_fifo_v1';
+		let transactions = []; // {id, fecha, tipo, empresa, cantidad, precio}
+		let currentFilterEmpresa = '';
+
+		// Utilidades
+		const $ = id=>document.getElementById(id);
+		const fmt = v => (Math.round(v*100)/100).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+		// Cálculo FIFO: a partir de transactions recrea posiciones y G/P realizado
+		function computeFIFO(txns){
+			const companies = {};
+			const realizedSeries = []; // {fecha, realizedChange}
+
+			// Ordenar por fecha
+			const ordered = [...txns].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+
+			for(const t of ordered){
+				const c = (t.empresa||'').toUpperCase();
+				if(!companies[c]) companies[c] = {openLots:[], qty:0, realized:0};
+
+				if(t.tipo === 'compra'){
+					// añadir lote (compra)
+					companies[c].openLots.push({cantidad: Number(t.cantidad), precio: Number(t.precio), fecha: t.fecha});
+					companies[c].qty += Number(t.cantidad);
+				} else {
+					// venta: consumir lotes según FIFO
+					let sellQty = Number(t.cantidad);
+					if(sellQty > companies[c].qty){
+						// venta que excede Cantidad: rechazamos en la UI, pero aquí nos protegemos
+						sellQty = companies[c].qty; // consume lo que haya
+					}
+
+					let realizedFromThisSale = 0;
+					while(sellQty > 0 && companies[c].openLots.length){
+						const lot = companies[c].openLots[0];
+						const take = Math.min(lot.cantidad, sellQty);
+						const profit = take * (Number(t.precio) - lot.precio);
+						realizedFromThisSale += profit;
+						lot.cantidad -= take;
+						sellQty -= take;
+						companies[c].qty -= take;
+						if(lot.cantidad <= 0) companies[c].openLots.shift();
+					}
+					companies[c].realized += realizedFromThisSale;
+					realizedSeries.push({fecha: t.fecha, empresa: c, delta: realizedFromThisSale});
+				}
+			}
+
+			// calcular base de coste (coste total de lotes abiertos)
+			for(const [c,info] of Object.entries(companies)){
+				info.cost = info.openLots.reduce((s,l)=>s + l.cantidad * l.precio, 0);
+				info.avgCost = info.qty ? info.cost / info.qty : 0;
+			}
+
+			// preparar G/P acumulado por fecha (ordenado)
+			realizedSeries.sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+			let cum = 0;
+			const cumSeries = realizedSeries.map(s=>{ cum += s.delta; return {fecha:s.fecha, cum: cum}; });
+
+			return {companies, realizedSeries, cumSeries};
+		}
+
+		// obtener lista única de empresas (tickers) ordenadas
+		function getCompanies(txns){
+			const set = new Set();
+			for(const t of txns){ if(t.empresa) set.add((t.empresa||'').toUpperCase()); }
+			return Array.from(set).sort();
+		}
+
+		function renderFilterOptions(){
+			const sel = $('filterEmpresa');
+			if(!sel) return;
+			const comps = getCompanies(transactions);
+			// guardar selección previa
+			const prev = sel.value || '';
+			sel.innerHTML = '<option value="">Todas las empresas</option>' + comps.map(c => `<option value="${c}">${c}</option>`).join('');
+			if(prev) sel.value = prev;
+		}
+
+		// Funciones de renderizado
+			function renderTransactions(){
+				const tbody = $('txTable').querySelector('tbody');
+				tbody.innerHTML = '';
+				const ordered = transactions.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+				const filtered = ordered.filter(tx => {
+					if(!currentFilterEmpresa) return true;
+					return (tx.empresa||'').toUpperCase() === currentFilterEmpresa;
+				});
+						filtered.forEach(tx=>{
+							const tr = document.createElement('tr');
+							// añadir clase por tipo para colorear la fila
+							if(tx.tipo === 'compra') tr.classList.add('tx-compra');
+							if(tx.tipo === 'venta') tr.classList.add('tx-venta');
+							tr.innerHTML = `<td>${tx.fecha}</td><td>${tx.tipo}</td><td>${(tx.empresa||'').toUpperCase()}</td><td>${tx.cantidad}</td><td>${fmt(tx.precio)}</td><td>${fmt(tx.cantidad*tx.precio)}</td><td><button data-id="${tx.id}">Eliminar</button></td>`;
+							tbody.appendChild(tr);
+						});
+			}
+
+			function renderSummary(){
+				const root = $('summary'); root.innerHTML = '';
+				const {companies} = computeFIFO(transactions);
+				if(!Object.keys(companies).length){ root.innerHTML = '<div class="muted">Sin datos</div>'; return; }
+				for(const [c,info] of Object.entries(companies)){
+					const div = document.createElement('div');
+					div.style.marginBottom='12px';
+					const color = colorFromString(c);
+					div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+							<div style="display:flex;align-items:center;gap:10px">
+								<span class="chip" style="background:${color};color:#042022"><span class="badge" style="background:rgba(0,0,0,0.12)"></span>${c}</span>
+								<div class="small muted">Cantidad: <strong style="color:#fff">${info.qty}</strong></div>
+							</div>
+							<div style="text-align:right">
+								<div class="small muted">Coste medio</div>
+								<div style="font-weight:700">${fmt(info.avgCost)}</div>
+							</div>
+						</div>
+						<div style="display:flex;gap:12px;margin-top:8px">
+							<div class="small muted">Coste total abierto: ${fmt(info.cost)}</div>
+							<div class="small muted">G/P realizado: <strong style="color:${info.realized>=0? 'var(--success)': 'var(--danger)'}">${fmt(info.realized)}</strong></div>
+						</div>`;
+					root.appendChild(div);
+				}
+			}
+
+			// Gráficos
+			let distChart, plChart;
+			// color generator para empresas
+			function colorFromString(s){
+				let h = 0; for(let i=0;i<s.length;i++) h = s.charCodeAt(i) + ((h<<5)-h);
+				const hue = Math.abs(h) % 360; return `hsl(${hue} 70% 55%)`;
+			}
+		function updateCharts(){
+			const {companies, cumSeries} = computeFIFO(transactions);
+			const labels = Object.keys(companies);
+			const dataQty = labels.map(l=>companies[l].qty);
+			const dataCost = labels.map(l=>companies[l].cost);
+			const bgColors = labels.map(l=>colorFromString(l));
+
+			// Distribution chart (cantidad)
+					if(!distChart){
+						distChart = new Chart($('distChart'),{type:'doughnut',data:{labels, datasets:[{data:dataQty,backgroundColor:bgColors}]}, options:{plugins:{legend:{position:'bottom',labels:{color:'#cbd5e1'}}}} });
+					} else {
+						distChart.data.labels = labels; distChart.data.datasets[0].data = dataQty; distChart.data.datasets[0].backgroundColor = bgColors; distChart.update();
+					}
+
+			// G/P acumulado
+			const labelsPL = cumSeries.map(s=>s.fecha);
+			const dataPL = cumSeries.map(s=>Math.round(s.cum*100)/100);
+			if(!plChart){
+				plChart = new Chart($('plChart'),{type:'line',data:{labels:labelsPL, datasets:[{label:'G/P realizado acumulado',data:dataPL,borderColor:'#2b7a78',fill:false}]}, options:{scales:{x:{display:true}}}});
+			} else {
+				plChart.data.labels = labelsPL; plChart.data.datasets[0].data = dataPL; plChart.update();
+			}
+		}
+
+		// CRUD
+		function addTransaction(t){
+			transactions.push(t); saveData(); renderAll();
+		}
+
+		function removeTransaction(id){ transactions = transactions.filter(t=>t.id!==id); saveData(); renderAll(); }
+
+		// Persistence
+		function saveData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions)); }
+		function loadData(){ const raw = localStorage.getItem(STORAGE_KEY); transactions = raw ? JSON.parse(raw) : []; }
+		function clearAll(){ if(confirm('Borrar todos los datos? Esta acción no se puede deshacer.')){ transactions=[]; saveData(); renderAll(); } }
+
+		// Export / Import
+		function exportCSV(){
+			if(!transactions.length){ alert('No hay transacciones para exportar'); return; }
+			const hdr = ['fecha','tipo','empresa','cantidad','precio'];
+			const rows = transactions.map(t=>[t.fecha,t.tipo,t.empresa,t.cantidad,t.precio]);
+			const csv = [hdr.join(','), ...rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','))].join('\n');
+			const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+			const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='transacciones.csv'; a.click(); URL.revokeObjectURL(url);
+		}
+
+		// CSV import / export
+	function exportJSON(){ /* eliminado: sólo CSV */ }
+
+		function parseCSV(text){
+			// simple CSV parser that handles quoted fields and commas inside quotes
+			const rows = [];
+			let cur = '';
+			let row = [];
+			let inQuotes = false;
+			for(let i=0;i<text.length;i++){
+				const ch = text[i];
+				const next = text[i+1];
+				if(ch === '"'){
+					if(inQuotes && next === '"'){ cur += '"'; i++; continue; }
+					inQuotes = !inQuotes; continue;
+				}
+				if(ch === ',' && !inQuotes){ row.push(cur); cur = ''; continue; }
+				if((ch === '\n' || ch === '\r') && !inQuotes){ if(cur !== '' || row.length){ row.push(cur); rows.push(row); row = []; cur = ''; } // skip duplicate newlines
+					// skip possible \r\n
+					if(ch === '\r' && text[i+1] === '\n') i++; continue;
+				}
+				cur += ch;
+			}
+			if(cur !== '' || row.length){ row.push(cur); rows.push(row); }
+			return rows;
+		}
+
+		function importCSVFile(file){
+			const reader = new FileReader();
+			reader.onload = e => {
+				try{
+					const text = e.target.result;
+					const rows = parseCSV(text).filter(r => r.length>0);
+					if(!rows.length) return alert('CSV vacío');
+					const header = rows[0].map(h => h.trim().toLowerCase());
+					const expected = ['fecha','tipo','empresa','cantidad','precio'];
+					// map header indexes
+					const idx = {};
+					for(const h of expected){ const i = header.indexOf(h); if(i === -1) return alert('CSV inválido: cabecera debe contener '+expected.join(',')); idx[h]=i; }
+					const parsed = [];
+					for(let i=1;i<rows.length;i++){
+						const r = rows[i]; if(r.length < expected.length) continue;
+						const obj = {
+							id: cryptoRandomId(),
+							fecha: r[idx['fecha']].trim(),
+							tipo: (r[idx['tipo']].trim()||'compra').toLowerCase(),
+							empresa: (r[idx['empresa']].trim()||'').toUpperCase(),
+							cantidad: Number(r[idx['cantidad']]),
+							precio: Number(r[idx['precio']])
+						};
+						// basic validation
+						if(!obj.fecha || !obj.empresa || !obj.tipo) continue;
+						parsed.push(obj);
+					}
+					if(!parsed.length) return alert('No se encontraron filas válidas en el CSV');
+					transactions = parsed; saveData(); renderAll(); alert('Importación CSV completada: '+parsed.length+' filas');
+				} catch(err){ alert('Error importando CSV: '+err.message); }
+			};
+			reader.readAsText(file);
+		}
+
+		// Render all
+		function renderAll(){ renderFilterOptions(); renderTransactions(); renderSummary(); updateCharts(); }
+
+		// Event wiring
+		document.addEventListener('DOMContentLoaded', ()=>{
+			loadData(); renderAll();
+
+			$('txForm').addEventListener('submit', e=>{
+				e.preventDefault();
+				const fecha = $('fecha').value || new Date().toISOString().slice(0,10);
+				const tipo = $('tipo').value;
+				const empresa = ($('empresa').value||'').trim().toUpperCase();
+				const cantidad = Number($('cantidad').value);
+				const precio = Number($('precio').value);
+				if(!empresa){ alert('Ingrese el nombre de la empresa (ticker)'); return; }
+				if(cantidad <= 0 || precio < 0){ alert('Cantidad/Precio inválidos'); return; }
+
+				// validate sell availability
+				if(tipo === 'venta'){
+					const {companies} = computeFIFO(transactions);
+					const have = (companies[empresa] && companies[empresa].qty) || 0;
+					if(cantidad > have){ alert(`No tiene suficiente cantidad para vender. Disponible: ${have}`); return; }
+				}
+
+				addTransaction({id: cryptoRandomId(), fecha, tipo, empresa, cantidad, precio});
+				$('txForm').reset();
+			});
+
+			// actualizar estilo del select #tipo según valor
+			function updateTipoStyle(){
+				const el = $('tipo');
+				if(!el) return;
+				el.classList.remove('tipo-compra','tipo-venta');
+				if(el.value === 'compra') el.classList.add('tipo-compra');
+				if(el.value === 'venta') el.classList.add('tipo-venta');
+			}
+
+			// inicializar y escuchar cambios
+			const tipoEl = $('tipo');
+			if(tipoEl){ tipoEl.addEventListener('change', ()=>{ updateTipoStyle(); }); updateTipoStyle(); }
+
+					$('limpiarForm').addEventListener('click', ()=>$('txForm').reset());
+
+					// filtro por empresa
+					const sel = $('filterEmpresa');
+					if(sel){
+						sel.addEventListener('change', e=>{
+							currentFilterEmpresa = (e.target.value || '').toUpperCase(); renderTransactions();
+						});
+					}
+
+			$('txTable').addEventListener('click', e=>{
+				if(e.target.tagName==='BUTTON'){
+					const id = e.target.dataset.id; if(confirm('Eliminar transacción?')) removeTransaction(id);
+				}
+			});
+
+			$('exportCSV').addEventListener('click', exportCSV);
+			// CSV import wiring
+			$('btnImportCSV').addEventListener('click', ()=>$('importCSV').click());
+			$('importCSV').addEventListener('change', e=>{ if(e.target.files.length) importCSVFile(e.target.files[0]); e.target.value=''; });
+			$('btnClear').addEventListener('click', clearAll);
+		});
+
+		// small helper id
+		function cryptoRandomId(){ return Math.random().toString(36).slice(2,9); }
+
+	</script>
+</body>
+</html>
